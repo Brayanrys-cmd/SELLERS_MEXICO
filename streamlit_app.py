@@ -19,14 +19,8 @@ import seaborn as sns
 file_path = 'BBDD TA - BD.csv'
 df = pd.read_csv(file_path, sep=',', header=0, index_col=0)
 
-# Seleccionar columnas de tipo 'object'
-object_columns = df.select_dtypes(include=['object']).columns
-
-# Filtrar columnas de tipo 'object' que tienen valores faltantes
-cf = [col for col in object_columns if df[col].isnull().any()]
-
-# Imputar los valores faltantes con la moda
-from sklearn.impute import SimpleImputer
+# Imputación de valores faltantes
+cf = df.columns[df.isnull().any()]
 imputador = SimpleImputer(strategy='most_frequent')
 df[cf] = imputador.fit_transform(df[cf])
 
@@ -70,30 +64,20 @@ def preparar_datos_modelo(df):
     df.replace([np.inf, -np.inf], np.nan, inplace=True)
     scaler = StandardScaler()
     df['CVR_estandarizada'] = scaler.fit_transform(df[['CVR']])
-
-    # Aplicar KBinsDiscretizer a la variable "CVR" estandarizada
     kbd = KBinsDiscretizer(n_bins=3, encode='ordinal', strategy='quantile')
-
-    # Handle NaN values before applying KBinsDiscretizer
-    df['CVR_estandarizada'] = df['CVR_estandarizada'].fillna(df['CVR_estandarizada'].mean()) # Replace NaN with mean
-
     df['CVR_binned'] = kbd.fit_transform(df[['CVR_estandarizada']])
 
     # Clustering
-    # Reshape de la columna para el algoritmo de clustering
     X = df['CVR'].values.reshape(-1, 1)
+    n_clusters = 3
+    if len(df) >= n_clusters:
+        kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=0).fit(X)
+        df['CVR_cluster'] = kmeans.labels_
+    else:
+        kmeans = KMeans(n_clusters=1, random_state=0).fit(X)
+        df['CVR_cluster'] = kmeans.labels_
 
-    # Imputar valores faltantes (NaN) con la media
-    imputer = SimpleImputer(strategy='mean')
-    X_imputed = imputer.fit_transform(X)
 
-    # Aplicar K-means con, por ejemplo, 3 clusters
-    kmeans = KMeans(n_clusters=3, random_state=0).fit(X_imputed)
-    df['CVR_cluster'] = kmeans.labels_
-    columnas_numericas = df.select_dtypes(include=['float64', 'int64'])
-
-    # Agregar la columna 'categoria' al DataFrame de columnas numéricas
-    columnas_numericas['CVR_binned'] = df['CVR_binned']
     # Check if 'ESCOLARIDAD' column exists before processing
     if 'ESCOLARIDAD' in df.columns:
         # Codificación de 'ESCOLARIDAD'
@@ -111,8 +95,8 @@ def preparar_datos_modelo(df):
 
     # Selección de columnas relevantes
     columns_to_keep = [
-        'HIJOS', 'GENERO', 'Fuente de Reclutamiento', 'Tipo de Contacto',
-        'ESCOLARIDAD_Numerica', 'EDAD', 'CVR_cluster','CVR_binned','SECTOR','LIDER'
+        'HIJOS', 'GENERO', 'Fuente de Reclutamiento', 'Tipo de Contacto','SECTOR',
+        'ESCOLARIDAD_Numerica', 'EDAD', 'CVR_cluster','TIEMPO ESTUDIO','EXPERIENCIA','LIDER'
     ]
     df = df[columns_to_keep]
 
@@ -133,28 +117,30 @@ def preparar_datos_modelo(df):
     df_com = pd.concat([data_imp, datos_dummies], axis=1)
 
     # Separar características (X) y la variable objetivo (y)
-    X = df_com.drop(columns=['CVR_binned'])
-    y = df_com['CVR_binned']
+    X = df_com.drop(columns=['CVR_cluster'])
+    y = df_com['CVR_cluster']
 
     # Aplicación de SMOTE para sobremuestreo si hay suficientes datos y clases
-
-    smote = SMOTE(sampling_strategy='not majority', random_state=42)
-    X_res, y_res = smote.fit_resample(X, y)
-
-    # Crear un nuevo DataFrame con los datos balanceados
-    df_res = pd.DataFrame(X_res, columns=X.columns)
-    df_res['CVR_binned'] = y_res
+    if len(df_com) > 1 and len(y.unique()) > 1:
+        # Fill missing values in X before applying SMOTE
+        X = X.fillna(X.mean())  # Replace NaNs with the mean of each column
+        smote = SMOTE(sampling_strategy='not majority', random_state=42)
+        X_res, y_res = smote.fit_resample(X, y)
+        df_res = pd.DataFrame(X_res, columns=X.columns)
+        df_res['CVR_cluster'] = y_res
+    else:
+        raise ValueError("Proceso fallido: datos insuficientes o falta de clases múltiples.")
 
 
     # Filtrado de variables con baja correlación con 'CVR_cluster'
     correlation_matrix = df_res.corr()
     correlation_threshold = 0.5
-    low_correlation_vars = correlation_matrix[abs(correlation_matrix['CVR_binned']) < correlation_threshold]['CVR_binned']
+    low_correlation_vars = correlation_matrix[abs(correlation_matrix['CVR_cluster']) < correlation_threshold]['CVR_cluster']
     low_correlation_var_names = low_correlation_vars.index.tolist()
 
     # Asegurar que 'CVR_cluster' esté en la lista de variables seleccionadas
-    if 'CVR_binned' not in low_correlation_var_names:
-        low_correlation_var_names.append('CVR_binned')
+    if 'CVR_cluster' not in low_correlation_var_names:
+        low_correlation_var_names.append('CVR_cluster')
 
     # Crear un nuevo DataFrame con las variables seleccionadas
     df_low_corr = df_res[low_correlation_var_names]
@@ -164,8 +150,8 @@ def preparar_datos_modelo(df):
     df_low_corr.drop(columns=[col for col in columns_to_drop if col in df_low_corr.columns], axis=1, inplace=True)
 
     # Definir las variables predictoras (X) y la variable objetivo (y)
-    X = df_low_corr.drop(columns=['CVR_binned'])
-    y = df_low_corr['CVR_binned']
+    X = df_low_corr.drop(columns=['CVR_cluster'])
+    y = df_low_corr['CVR_cluster']
 
     return X, y
 
@@ -175,10 +161,10 @@ def preparar_datos_modelo(df):
 # Definir el modelo Random Forest
 def entrenar_modelo(X, y):
     param_grid = {
-        'n_estimators': [100],
-        'max_depth': [None],
-        'min_samples_split': [5],
-        'min_samples_leaf': [2]
+    'n_estimators': [100],
+    'max_depth': [None],
+    'min_samples_split': [5],
+    'min_samples_leaf': [2]
     }
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
