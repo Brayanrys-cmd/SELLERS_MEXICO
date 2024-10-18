@@ -48,7 +48,7 @@ def transformar_datos(df):
     df['FECHA DE RETIRO'].fillna(fecha_hoy, inplace=True)
 
     # Cálculo de nuevas características
-    df['CVR'] = df['Cantidad de Transacciones'] / df['Meta']
+    df['CVR'] = df['Cantidad de Transacciones'] / df['Meta'].replace(0, np.nan)
     df['CVR'] = df['CVR'].fillna(0)
     df['Salario_USD'] = np.where(df['PAIS'] == 'COLOMBIA', df['SALARIO_REFERENTE'] / 4000, np.nan)
     df['diferencia_dias'] = (df['FECHA DE RETIRO'] - df['FECHA DE INGRESO']).dt.days
