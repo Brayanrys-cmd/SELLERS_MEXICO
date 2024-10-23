@@ -184,7 +184,7 @@ X, y = preparar_datos_modelo(df)
 modelo, X_test, y_test = entrenar_modelo(X, y)
 
 # Aplicación Streamlit
-st.title("Predicción de Calidad de Nuevos Ingresos")
+st.title("Predicción de Calidad de Nuevos Ingresos Buyers")
 
 # Formulario para ingresar nuevos datos
 st.sidebar.header("Ingrese los datos del nuevo ingreso")
@@ -239,9 +239,9 @@ modelo, X_test, y_test = entrenar_modelo(X, y)
 
 # Diccionario para mapear los nombres de las clases
 nombres_categorias = {
-    0: "Alto CVR",
-    1: "Bajo CVR",
-    2: "Medio CVR"
+    0: "Alto Cumplimiento",
+    1: "Bajo Cumplimiento",
+    2: "Medio Cumplimiento"
 }
 
 # Realizar la predicción
@@ -249,12 +249,15 @@ if st.sidebar.button("Realizar Predicción"):
     # Obtener las probabilidades predichas para cada clase
     probabilidades = modelo.predict_proba(nuevo_dato)
 
+    # Multiplicar las probabilidades por 100 para mostrarlas como porcentaje
+    probabilidades_porcentaje = (probabilidades * 100).round(2)
+
     # Crear un DataFrame para mostrar las probabilidades de cada clase
     probabilidades_df = pd.DataFrame(probabilidades, columns=[nombres_categorias[clase] for clase in modelo.classes_])
-    st.write("Probabilidades de cada categoría de CVR:")
+    st.write("Probabilidades de cada categoría de Cumplimiento:")
     st.write(probabilidades_df)
 
     # Mostrar la categoría con la mayor probabilidad
     prediccion = modelo.predict(nuevo_dato)
     categoria_predicha = nombres_categorias[prediccion[0]]
-    st.write(f"La categoría de CVR estimada es: {categoria_predicha}")
+    st.write(f"La categoría de cumplimiento estimada es: {categoria_predicha}")
