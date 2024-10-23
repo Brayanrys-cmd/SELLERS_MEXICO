@@ -253,7 +253,7 @@ if st.sidebar.button("Realizar Predicción"):
     probabilidades_porcentaje = (probabilidades * 100).round(2)
 
     # Crear un DataFrame para mostrar las probabilidades de cada clase
-    probabilidades_df = pd.DataFrame(probabilidades, columns=[nombres_categorias[clase] for clase in modelo.classes_])
+    probabilidades_df = pd.DataFrame(probabilidades_porcentaje, columns=[nombres_categorias[clase] for clase in modelo.classes_])
     st.write("Probabilidades de cada categoría de Cumplimiento:")
     st.write(probabilidades_df)
 
