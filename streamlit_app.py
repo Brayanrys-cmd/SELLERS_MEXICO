@@ -32,7 +32,8 @@ def transformar_datos(df):
 
     # Filtrar datos
     df = df[df['Rol'] == 'Comercial']
-    df = df[df['EMPRESA'] == 'BROKERS']
+    df = df[df['EMPRESA'] == 'SELLERS']
+    df = df[df['EMPRESA'] == 'MEXICO']
 
     # Guardar variables originales antes de la transformación
     df_original = df.copy()
@@ -96,7 +97,7 @@ def preparar_datos_modelo(df):
     # Selección de columnas relevantes
     columns_to_keep = [
         'HIJOS', 'GENERO', 'Fuente de Reclutamiento', 'Tipo de Contacto','SECTOR',
-        'ESCOLARIDAD_Numerica', 'EDAD', 'CVR_cluster','TIEMPO ESTUDIO','EXPERIENCIA','LIDER'
+        'ESCOLARIDAD_Numerica', 'EDAD', 'CVR_binned','TIEMPO ESTUDIO','EXPERIENCIA','LIDER'
     ]
     df = df[columns_to_keep]
 
@@ -117,8 +118,8 @@ def preparar_datos_modelo(df):
     df_com = pd.concat([data_imp, datos_dummies], axis=1)
 
     # Separar características (X) y la variable objetivo (y)
-    X = df_com.drop(columns=['CVR_cluster'])
-    y = df_com['CVR_cluster']
+    X = df_com.drop(columns=['CVR_binned'])
+    y = df_com['CVR_binned']
 
     # Aplicación de SMOTE para sobremuestreo si hay suficientes datos y clases
     if len(df_com) > 1 and len(y.unique()) > 1:
@@ -127,7 +128,7 @@ def preparar_datos_modelo(df):
         smote = SMOTE(sampling_strategy='not majority', random_state=42)
         X_res, y_res = smote.fit_resample(X, y)
         df_res = pd.DataFrame(X_res, columns=X.columns)
-        df_res['CVR_cluster'] = y_res
+        df_res['CVR_binned'] = y_res
     else:
         raise ValueError("Proceso fallido: datos insuficientes o falta de clases múltiples.")
 
@@ -135,12 +136,12 @@ def preparar_datos_modelo(df):
     # Filtrado de variables con baja correlación con 'CVR_cluster'
     correlation_matrix = df_res.corr()
     correlation_threshold = 0.5
-    low_correlation_vars = correlation_matrix[abs(correlation_matrix['CVR_cluster']) < correlation_threshold]['CVR_cluster']
+    low_correlation_vars = correlation_matrix[abs(correlation_matrix['CVR_binned']) < correlation_threshold]['CVR_binned']
     low_correlation_var_names = low_correlation_vars.index.tolist()
 
     # Asegurar que 'CVR_cluster' esté en la lista de variables seleccionadas
-    if 'CVR_cluster' not in low_correlation_var_names:
-        low_correlation_var_names.append('CVR_cluster')
+    if 'CVR_binned' not in low_correlation_var_names:
+        low_correlation_var_names.append('CVR_binned')
 
     # Crear un nuevo DataFrame con las variables seleccionadas
     df_low_corr = df_res[low_correlation_var_names]
@@ -150,8 +151,8 @@ def preparar_datos_modelo(df):
     df_low_corr.drop(columns=[col for col in columns_to_drop if col in df_low_corr.columns], axis=1, inplace=True)
 
     # Definir las variables predictoras (X) y la variable objetivo (y)
-    X = df_low_corr.drop(columns=['CVR_cluster'])
-    y = df_low_corr['CVR_cluster']
+    X = df_low_corr.drop(columns=['CVR_binned'])
+    y = df_low_corr['CVR_binned']
 
     return X, y
 
@@ -161,10 +162,12 @@ def preparar_datos_modelo(df):
 # Definir el modelo Random Forest
 def entrenar_modelo(X, y):
     param_grid = {
-    'n_estimators': [100],
-    'max_depth': [None],
-    'min_samples_split': [5],
-    'min_samples_leaf': [2]
+    'bootstrap': [True], 
+    'max_depth': [20], 
+    'max_features': ['log2'], 
+    'min_samples_leaf': [1], 
+    'min_samples_split': [10],
+    'n_estimators': [200]
     }
 
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
@@ -184,7 +187,7 @@ X, y = preparar_datos_modelo(df)
 modelo, X_test, y_test = entrenar_modelo(X, y)
 
 # Aplicación Streamlit
-st.title("Predicción de Calidad de Nuevos Ingresos Buyers")
+st.title("Predicción de Calidad de Nuevos Ingresos Sellers Mexico")
 
 # Formulario para ingresar nuevos datos
 st.sidebar.header("Ingrese los datos del nuevo ingreso")
