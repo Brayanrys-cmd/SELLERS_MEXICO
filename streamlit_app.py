@@ -33,7 +33,7 @@ def transformar_datos(df):
     # Filtrar datos
     df = df[df['Rol'] == 'Comercial']
     df = df[df['EMPRESA'] == 'SELLERS']
-    df = df[df['EMPRESA'] == 'MEXICO']
+    df = df[df['PAIS'] == 'MEXICO']
 
     # Guardar variables originales antes de la transformación
     df_original = df.copy()
